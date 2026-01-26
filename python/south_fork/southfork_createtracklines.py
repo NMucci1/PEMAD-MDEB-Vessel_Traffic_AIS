@@ -7,7 +7,6 @@ import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 from shapely.geometry import Point, LineString
-from shapely.prepared import prep
 
 # CONFIGURATION
 # Set folder paths
