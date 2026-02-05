@@ -13,20 +13,41 @@ from shapely.geometry import Point, LineString
 base_path = Path.cwd()
 gdb_path = base_path / "data" / "south_fork" / "south_fork_vessel_ais.gdb"
 input_layer = "south_fork_vessel_merged"
+ports_layer = "south_fork_ports"
 output_layer = "south_fork_vessel_trips_lines"
 
 # Port Coordinates for Geofencing
 ports_data = {
-    'ProvPort': (-71.391, 41.802), 'New_London': (-72.093, 41.354),
-    'Point_Judith': (-71.488, 41.363), 'Quonset': (-71.415, 41.585),
-    'Montauk': (-71.931, 41.074), 'New_Bedford': (-70.923, 41.636),
+    'ProvPort': (-71.391, 41.802), 'New_London': (-72.091, 41.354),
+    'Point_Judith': (-71.511, 41.379), 'Quonset': (-71.415, 41.585),
+    'Montauk': (-71.937, 41.074), 'New_Bedford': (-70.921, 41.6345),
     'Bridgeport': (-73.181, 41.173), 'Shinnecock': (-72.476, 40.842),
-    'Fall_River': (-71.164, 41.704), 'Fairhaven': (-70.906, 41.624),
+    'Fall_River': (-71.164, 41.704), 'Fairhaven': (-70.908, 41.624),
     'Newport_RI': (-71.328, 41.484), 'Sakonnet_Harbor': (-71.193, 41.464),
-    'Brooklyn_NY': (-74.015, 40.672), 'Charleston_SC': (-79.927, 32.818),
-    'Corpus_Christi': (-97.395, 27.800), 'Millville_NJ': (-75.044, 39.213)
+    'Brooklyn_NY': (-74.015, 40.672), 'Charleston_SC': (-79.925, 32.773),
+    'Corpus_Christi': (-97.388, 27.793) #, 'Millville_NJ': (-75.044, 39.213) # Millville, NJ is listed in the report but is not coastal
 }
 
+# Create a point feature class of the port locations (for mapping/visualization)
+# Convert dictionary to a list of records
+ports_list = [{'port_name': name, 'lon': coords[0], 'lat': coords[1]} 
+             for name, coords in ports_data.items()]
+
+# Create a standard Pandas DataFrame
+ports_df = pd.DataFrame(ports_list)
+
+# Convert to a GeoDataFrame
+ports_gdf = gpd.GeoDataFrame(
+    ports_df, 
+    geometry=gpd.points_from_xy(ports_df.lon, ports_df.lat),
+    crs="EPSG:4326"  # Standard WGS84 coordinate system
+)
+
+# Export to the file geodatabase 
+ports_gdf.to_file(str(gdb_path), layer=ports_layer, driver="OpenFileGDB", engine="pyogrio")
+print(f"---Port point feature class created at {gdb_path}---")
+
+# Function to create tracklines
 def run_trackline_pipeline():
     # Load the merged point layer
     print(f"Reading points from {input_layer}...")
@@ -44,7 +65,7 @@ def run_trackline_pipeline():
     port_pts = [Point(lon, lat) for lon, lat in ports_data.values()]
     ports_gdf = gpd.GeoDataFrame({'port_name': list(ports_data.keys())}, geometry=port_pts, crs="EPSG:4326")
     ports_mask_m = ports_gdf.to_crs(epsg=32618)
-    ports_mask_m['geometry'] = ports_mask_m.buffer(1000) # 1km radius
+    ports_mask_m['geometry'] = ports_mask_m.buffer(1000) # 1km buffer radius around port points
     port_mask_geom = ports_mask_m.to_crs(epsg=4326).union_all()
 
     # Trip Segmentation/Creation & Flagging Logic

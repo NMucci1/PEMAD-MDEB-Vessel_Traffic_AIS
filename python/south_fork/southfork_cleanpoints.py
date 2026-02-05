@@ -28,7 +28,7 @@ output_folder.mkdir(parents=True, exist_ok=True)
 hist_folder = output_folder / "vessel_histograms"
 hist_folder.mkdir(parents=True, exist_ok=True)
 
-def get_land_mask(url, buffer_meters=-200):
+def get_land_mask(url, buffer_meters=-500):
     print("Fetching land boundaries from REST API...")
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -65,7 +65,9 @@ def process_ais_to_gdb():
         try:
             df = pd.read_csv(csv_file, parse_dates=['BaseDateTime'])
             df.columns = df.columns.str.upper()
-            df = df.dropna(subset=['MMSI', 'SOG', 'LAT', 'LON'])
+            # Remove rows where SOG, lat, long are NA
+            df = df.dropna(subset=['SOG', 'LAT', 'LON'])
+            # Remove rows where SOG is greater than 40
             df = df[df['SOG'] <= 40]
             
             if df.empty: 
@@ -79,18 +81,23 @@ def process_ais_to_gdb():
                 print("Skipped (Land)")
                 continue
 
-            # --- Time Gaps & Stats ---
+            # Time Gaps & Stats
+            # Sort geodataframe by MMSI and time
             gdf = gdf.sort_values(['MMSI', 'BASEDATETIME'])
+            # Create a column of the time difference between consecutive points 
             gdf['TIME_DIFF_HOURS'] = gdf.groupby('MMSI')['BASEDATETIME'].diff().dt.total_seconds() / 3600
             
             total_pts = len(gdf)
+            # Sum time gaps of greater than 1 hr
             gaps_gt_1 = (gdf['TIME_DIFF_HOURS'] > 1).sum()
+            # Sum time gaps of greater than 8 hrs
             gaps_gt_8 = (gdf['TIME_DIFF_HOURS'] > 8).sum()
             pct_gt_1 = (gaps_gt_1 / total_pts) * 100
             max_hr = gdf['TIME_DIFF_HOURS'].max()
             avg_min = gdf['TIME_DIFF_HOURS'].mean() * 60
             med_min = gdf['TIME_DIFF_HOURS'].median() * 60
             
+            # Create vessel stats
             all_vessel_stats[mmsi_label] = {
                 'MMSI': mmsi_label,
                 'total_points': total_pts,
@@ -102,7 +109,7 @@ def process_ais_to_gdb():
                 'median_gap_minutes': round(med_min, 2)
             }
 
-            # --- Histogram Logic (90th Percentile in Minutes) ---
+            # Create histograms of individual vessel time difference between points (90th Percentile in Minutes)
             plot_data_mins = gdf['TIME_DIFF_HOURS'].dropna() * 60
             if not plot_data_mins.empty:
                 p90_mins = plot_data_mins.quantile(0.90)
@@ -119,7 +126,7 @@ def process_ais_to_gdb():
                 plt.savefig(hist_folder / f"{mmsi_label}_hist.png")
                 plt.close()
 
-            # --- Export to GDB ---
+            # Export to GDB
             layer_name = f"V{mmsi_label}"
             
             # Individual Layer: Always 'w' to overwrite just this vessel's layer

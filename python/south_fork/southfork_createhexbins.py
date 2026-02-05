@@ -5,7 +5,6 @@
 
 # IMPORT LIBRARIES
 import geopandas as gpd
-import pandas as pd
 from pathlib import Path
 import h3
 from shapely.geometry import Polygon
@@ -49,7 +48,7 @@ def create_detailed_hexbins(gdb_path, input_layer=merged_layer_name, resolution=
     hex_gdf = gpd.GeoDataFrame(hex_summary, geometry='geometry', crs="EPSG:4326")
     
     # Save to GDB
-    layer_name = f"hexbins_res{resolution}_by_vessel"
+    layer_name = f"southfork_hexbins_res{resolution}"
     hex_gdf.to_file(str(gdb_path), layer=layer_name, driver="OpenFileGDB", engine="pyogrio")
     print(f"Success! Layer '{layer_name}' created.")
 
